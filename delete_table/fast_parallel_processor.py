@@ -14,6 +14,7 @@ import shutil
 import multiprocessing as mp
 from pathlib import Path
 from functools import partial
+from tqdm import tqdm
 
 
 def remove_column_direct(csv_file, column_index=0):
@@ -92,7 +93,6 @@ def main():
     
     # Process in parallel
     start_time = time.time()
-    completed = 0
     failed = 0
     
     # Use process pool
@@ -100,30 +100,39 @@ def main():
         # Map batches to workers
         batch_results = pool.map(partial(process_batch, column_index=0), batches)
         
-        # Flatten results and report progress
-        for batch_result in batch_results:
-            for result in batch_result:
-                completed += 1
-                if not result['success']:
-                    failed += 1
-                    print(f"Failed: {result['file']}: {result['error']}")
-                
-                # Progress update
-                if completed % 100 == 0 or completed == total_files:
-                    elapsed = time.time() - start_time
-                    rate = completed / elapsed
-                    percent = completed / total_files * 100
+        # Use tqdm to display progress
+        with tqdm(total=total_files, desc="🚀 Processing CSV files", 
+                  unit="files", ncols=100,
+                  bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as pbar:
+            
+            # Flatten results and report progress
+            for batch_result in batch_results:
+                for result in batch_result:
+                    if not result['success']:
+                        failed += 1
+                        # Use tqdm.write to avoid interfering with progress bar
+                        tqdm.write(f"❌ Failed: {result['file']}: {result['error']}")
                     
-                    print(f"Progress: {completed}/{total_files} ({percent:.1f}%) "
-                          f"Rate: {rate:.0f} files/sec", end='\r')
+                    # Update progress bar
+                    pbar.update(1)
+                    
+                    # Update real-time statistics
+                    elapsed = time.time() - start_time
+                    rate = pbar.n / elapsed if elapsed > 0 else 0
+                    pbar.set_postfix({
+                        'Success': pbar.n - failed,
+                        'Failed': failed,
+                        'Rate': f'{rate:.1f}/s'
+                    })
     
     # Final summary
     elapsed = time.time() - start_time
-    print(f"\n\nCompleted in {elapsed:.1f} seconds")
-    print(f"Processed: {total_files} files")
-    print(f"Success: {total_files - failed}")
-    print(f"Failed: {failed}")
-    print(f"Average rate: {total_files/elapsed:.0f} files/sec")
+    print(f"\n📊 Processing Summary:")
+    print(f"⏱️  Completed in {elapsed:.1f} seconds")
+    print(f"📁 Processed: {total_files} files")
+    print(f"✅ Success: {total_files - failed}")
+    print(f"❌ Failed: {failed}")
+    print(f"🚀 Average rate: {total_files/elapsed:.0f} files/sec")
 
 
 if __name__ == "__main__":

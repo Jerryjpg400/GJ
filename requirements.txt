@@ -1,3 +1,0 @@
-# Requirements for CSV Processing Scripts
-# All imported modules are from Python standard library
-# No external packages required
